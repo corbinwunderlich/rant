@@ -36,6 +36,9 @@ pub enum Literal {
 pub enum Expression {
     Term(Term),
     Add(Box<Expression>, Box<Expression>),
+    Subtract(Box<Expression>, Box<Expression>),
+    Multiply(Box<Expression>, Box<Expression>),
+    Divide(Box<Expression>, Box<Expression>),
 }
 
 #[derive(Debug, PartialEq)]
@@ -100,6 +103,27 @@ impl Parsable for Expression {
                 tokens.next();
 
                 Ok(Self::Add(Box::new(term), Box::new(Self::parse(tokens)?)))
+            }
+            Ok(Token::Subtract) => {
+                tokens.next();
+
+                Ok(Self::Subtract(
+                    Box::new(term),
+                    Box::new(Self::parse(tokens)?),
+                ))
+            }
+            Ok(Token::Multiply) => {
+                tokens.next();
+
+                Ok(Self::Multiply(
+                    Box::new(term),
+                    Box::new(Self::parse(tokens)?),
+                ))
+            }
+            Ok(Token::Divide) => {
+                tokens.next();
+
+                Ok(Self::Divide(Box::new(term), Box::new(Self::parse(tokens)?)))
             }
             _ => Ok(term),
         }
