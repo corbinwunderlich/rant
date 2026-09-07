@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+logos = "0.16.1"
 
 [lints.clippy]
 pedantic = { level = "deny", priority = -1 }
