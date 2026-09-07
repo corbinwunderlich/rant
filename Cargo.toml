@@ -4,7 +4,9 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+itertools = "0.15.0"
 logos = "0.16.1"
+thiserror = "2.0.20"
 
 [lints.clippy]
 pedantic = { level = "deny", priority = -1 }

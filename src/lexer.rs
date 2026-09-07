@@ -1,11 +1,13 @@
 use std::num::ParseIntError;
 
-use logos::Logos;
+use logos::{Lexer, Logos};
 
-#[derive(Default, Debug, Clone, PartialEq)]
+#[derive(Default, Debug, thiserror::Error, Clone, PartialEq)]
 pub enum Error {
+    #[error("invalid number token")]
     InvalidNumber,
     #[default]
+    #[error("invalid token")]
     InvalidToken,
 }
 
@@ -15,9 +17,9 @@ impl From<ParseIntError> for Error {
     }
 }
 
-#[derive(Debug, Logos)]
+#[derive(Debug, Logos, PartialEq)]
 #[logos(skip r"\s+", error = Error)]
-enum Token {
+pub enum Token {
     #[regex("[a-zA-Z_][a-zA-Z0-9_]*", |lex| lex.slice().parse().ok())]
     Ident(String),
     #[regex("[0-9]+", |lex| lex.slice().parse())]
@@ -50,8 +52,8 @@ enum Token {
     Comment(String),
 }
 
-pub fn tokenize(source: &str) -> Result<(), Error> {
-    let _lex = Token::lexer(source);
+pub fn tokenize(source: &str) -> Result<Lexer<'_, Token>, Error> {
+    let lex = Token::lexer(source);
 
-    Ok(())
+    Ok(lex)
 }
