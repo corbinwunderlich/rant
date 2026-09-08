@@ -1,6 +1,6 @@
 use std::num::ParseIntError;
 
-use logos::{Lexer, Logos};
+use logos::Logos;
 
 #[derive(Default, Debug, thiserror::Error, Clone, PartialEq)]
 pub enum Error {
@@ -58,8 +58,8 @@ pub enum Token {
     Comment,
 }
 
-pub fn tokenize(source: &str) -> Result<Lexer<'_, Token>, Error> {
-    let lex = Token::lexer(source);
+pub fn tokenize(source: &str) -> Result<Vec<Token>, Error> {
+    let lex = Token::lexer(source).collect::<Result<Vec<Token>, Error>>()?;
 
     Ok(lex)
 }

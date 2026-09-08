@@ -1,7 +1,9 @@
-use std::sync::atomic::{AtomicU8, Ordering};
+use std::{
+    sync::atomic::{AtomicU8, Ordering},
+    vec::IntoIter,
+};
 
 use itertools::{Itertools, MultiPeek};
-use logos::Lexer;
 
 use crate::lexer::Token;
 
@@ -11,14 +13,12 @@ pub enum Error {
     UnexpectedToken { expected: &'static str, got: String },
     #[error("failed to parse")]
     Parse,
-    #[error("failed to lex")]
-    Lexer(#[from] crate::lexer::Error),
     #[error("unexpected end of file")]
     UnexpectedEof,
 }
 
 trait Parsable: Sized {
-    fn parse(tokens: &mut MultiPeek<Lexer<'_, Token>>) -> Result<Self, Error>;
+    fn parse(tokens: &mut MultiPeek<IntoIter<Token>>) -> Result<Self, Error>;
 }
 
 type Ident = String;
@@ -71,10 +71,10 @@ pub enum Node {
 }
 
 impl Parsable for TypedIdent {
-    fn parse(tokens: &mut MultiPeek<Lexer<'_, Token>>) -> Result<Self, Error> {
+    fn parse(tokens: &mut MultiPeek<IntoIter<Token>>) -> Result<Self, Error> {
         let ident = match tokens.next() {
-            Some(Ok(Token::Ident(ident))) => ident,
-            Some(Ok(token)) => {
+            Some(Token::Ident(ident)) => ident,
+            Some(token) => {
                 return Err(Error::UnexpectedToken {
                     expected: "identifier",
                     got: format!("{token:?}"),
@@ -84,7 +84,7 @@ impl Parsable for TypedIdent {
         };
 
         if let token = tokens.next()
-            && token != Some(Ok(Token::Colon))
+            && token != Some(Token::Colon)
         {
             return Err(Error::UnexpectedToken {
                 expected: "`:`",
@@ -93,8 +93,8 @@ impl Parsable for TypedIdent {
         }
 
         let ty = match tokens.next() {
-            Some(Ok(Token::Ident(ident))) => ident,
-            Some(Ok(token)) => {
+            Some(Token::Ident(ident)) => ident,
+            Some(token) => {
                 return Err(Error::UnexpectedToken {
                     expected: "identifier",
                     got: format!("{token:?}"),
@@ -108,23 +108,23 @@ impl Parsable for TypedIdent {
 }
 
 impl Parsable for Expression {
-    fn parse(tokens: &mut MultiPeek<Lexer<'_, Token>>) -> Result<Self, Error> {
+    fn parse(tokens: &mut MultiPeek<IntoIter<Token>>) -> Result<Self, Error> {
         let term = Self::Term(Term::parse(tokens)?);
 
         tokens.reset_peek();
 
-        match tokens.peek().ok_or(Error::UnexpectedEof)?.as_ref() {
-            Ok(Token::Semicolon | Token::Comma) => {
+        match tokens.peek().ok_or(Error::UnexpectedEof)? {
+            Token::Semicolon | Token::Comma => {
                 tokens.next();
 
                 Ok(term)
             }
-            Ok(Token::Add) => {
+            Token::Add => {
                 tokens.next();
 
                 Ok(Self::Add(Box::new(term), Box::new(Self::parse(tokens)?)))
             }
-            Ok(Token::Subtract) => {
+            Token::Subtract => {
                 tokens.next();
 
                 Ok(Self::Subtract(
@@ -132,7 +132,7 @@ impl Parsable for Expression {
                     Box::new(Self::parse(tokens)?),
                 ))
             }
-            Ok(Token::Multiply) => {
+            Token::Multiply => {
                 tokens.next();
 
                 Ok(Self::Multiply(
@@ -140,7 +140,7 @@ impl Parsable for Expression {
                     Box::new(Self::parse(tokens)?),
                 ))
             }
-            Ok(Token::Divide) => {
+            Token::Divide => {
                 tokens.next();
 
                 Ok(Self::Divide(Box::new(term), Box::new(Self::parse(tokens)?)))
@@ -151,10 +151,10 @@ impl Parsable for Expression {
 }
 
 impl Parsable for FunctionCall {
-    fn parse(tokens: &mut MultiPeek<Lexer<'_, Token>>) -> Result<Self, Error> {
+    fn parse(tokens: &mut MultiPeek<IntoIter<Token>>) -> Result<Self, Error> {
         let ident = match tokens.next() {
-            Some(Ok(Token::Ident(ident))) => ident,
-            Some(Ok(token)) => {
+            Some(Token::Ident(ident)) => ident,
+            Some(token) => {
                 return Err(Error::UnexpectedToken {
                     expected: "identifier",
                     got: format!("{token:?}"),
@@ -164,7 +164,7 @@ impl Parsable for FunctionCall {
         };
 
         if let token = tokens.next()
-            && token != Some(Ok(Token::LeftParen))
+            && token != Some(Token::LeftParen)
         {
             return Err(Error::UnexpectedToken {
                 expected: "`(`",
@@ -176,20 +176,14 @@ impl Parsable for FunctionCall {
 
         let starting_parenthesis_depth = PARENTHESIS_DEPTH.load(Ordering::Relaxed);
 
-        while let Some(Ok(token)) = tokens.peek()
+        while let Some(token) = tokens.peek()
             && *token != Token::Semicolon
             && !(*token == Token::RightParen
                 && PARENTHESIS_DEPTH.load(Ordering::Relaxed) > starting_parenthesis_depth)
         {
             params.push(Expression::parse(tokens)?);
 
-            if *tokens
-                .peek()
-                .ok_or(Error::UnexpectedEof)?
-                .as_ref()
-                .map_err(Clone::clone)?
-                == Token::RightParen
-            {
+            if *tokens.peek().ok_or(Error::UnexpectedEof)? == Token::RightParen {
                 tokens.next();
 
                 if PARENTHESIS_DEPTH.load(Ordering::Relaxed) > starting_parenthesis_depth {
@@ -205,14 +199,10 @@ impl Parsable for FunctionCall {
 }
 
 impl Parsable for Term {
-    fn parse(tokens: &mut MultiPeek<Lexer<'_, Token>>) -> Result<Self, Error> {
+    fn parse(tokens: &mut MultiPeek<IntoIter<Token>>) -> Result<Self, Error> {
         tokens.reset_peek();
 
-        let next_token = tokens
-            .peek()
-            .ok_or(Error::UnexpectedEof)?
-            .as_ref()
-            .map_err(Clone::clone)?;
+        let next_token = tokens.peek().ok_or(Error::UnexpectedEof)?;
 
         match next_token {
             Token::Number(number) => {
@@ -232,7 +222,7 @@ impl Parsable for Term {
             Token::Ident(ident) => {
                 let ident = ident.clone();
 
-                if let Some(Ok(Token::LeftParen)) = tokens.peek() {
+                if let Some(Token::LeftParen) = tokens.peek() {
                     PARENTHESIS_DEPTH.fetch_add(1, Ordering::Relaxed);
 
                     return Ok(Self::FunctionCall(FunctionCall::parse(tokens)?));
@@ -251,9 +241,9 @@ impl Parsable for Term {
 }
 
 impl Parsable for Declaration {
-    fn parse(tokens: &mut MultiPeek<Lexer<'_, Token>>) -> Result<Self, Error> {
+    fn parse(tokens: &mut MultiPeek<IntoIter<Token>>) -> Result<Self, Error> {
         if let token = tokens.next()
-            && token != Some(Ok(Token::Fn))
+            && token != Some(Token::Fn)
         {
             return Err(Error::UnexpectedToken {
                 expected: "`fn`",
@@ -262,8 +252,8 @@ impl Parsable for Declaration {
         }
 
         let ident = match tokens.next() {
-            Some(Ok(Token::Ident(ident))) => ident,
-            Some(Ok(token)) => {
+            Some(Token::Ident(ident)) => ident,
+            Some(token) => {
                 return Err(Error::UnexpectedToken {
                     expected: "identifier",
                     got: format!("{token:?}"),
@@ -273,7 +263,7 @@ impl Parsable for Declaration {
         };
 
         if let token = tokens.next()
-            && token != Some(Ok(Token::LeftParen))
+            && token != Some(Token::LeftParen)
         {
             return Err(Error::UnexpectedToken {
                 expected: "`(`",
@@ -283,7 +273,7 @@ impl Parsable for Declaration {
 
         let mut params: Vec<TypedIdent> = Vec::new();
 
-        while let Some(Ok(token)) = tokens.peek() {
+        while let Some(token) = tokens.peek() {
             if *token == Token::RightParen {
                 tokens.next();
 
@@ -292,7 +282,7 @@ impl Parsable for Declaration {
 
             params.push(TypedIdent::parse(tokens)?);
 
-            match tokens.next().ok_or(Error::UnexpectedEof)?? {
+            match tokens.next().ok_or(Error::UnexpectedEof)? {
                 Token::Comma => continue,
                 Token::RightParen => break,
                 token => {
@@ -305,7 +295,7 @@ impl Parsable for Declaration {
         }
 
         if let token = tokens.next()
-            && token != Some(Ok(Token::Arrow))
+            && token != Some(Token::Arrow)
         {
             return Err(Error::UnexpectedToken {
                 expected: "`->`",
@@ -314,8 +304,8 @@ impl Parsable for Declaration {
         }
 
         let return_type = match tokens.next() {
-            Some(Ok(Token::Ident(ident))) => ident,
-            Some(Ok(token)) => {
+            Some(Token::Ident(ident)) => ident,
+            Some(token) => {
                 return Err(Error::UnexpectedToken {
                     expected: "identifier",
                     got: format!("{token:?}"),
@@ -325,7 +315,7 @@ impl Parsable for Declaration {
         };
 
         if let token = tokens.next()
-            && token != Some(Ok(Token::Equals))
+            && token != Some(Token::Equals)
         {
             return Err(Error::UnexpectedToken {
                 expected: "`=`",
@@ -342,13 +332,15 @@ impl Parsable for Declaration {
     }
 }
 
-pub fn parse(tokens: Lexer<'_, Token>) -> Result<Node, Error> {
-    let mut tokens = tokens.multipeek();
+pub fn parse(tokens: Vec<Token>) -> Result<Node, Error> {
+    let mut tokens = tokens.into_iter().multipeek();
 
     let mut declarations: Vec<Declaration> = Vec::new();
 
-    while let Ok(declaration) = Declaration::parse(&mut tokens) {
-        declarations.push(declaration);
+    while tokens.peek().is_some() {
+        tokens.reset_peek();
+
+        declarations.push(Declaration::parse(&mut tokens)?);
     }
 
     Ok(Node::Program(

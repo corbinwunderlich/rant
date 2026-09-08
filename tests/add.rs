@@ -1,19 +1,18 @@
 use std::{env, fs, path::Path};
 
-use logos::Lexer;
 use rant::{
     lexer::Token,
     parser::{Declaration, Expression, FunctionCall, Literal, Term, TypedIdent},
 };
 
-fn lex_add() -> Lexer<'static, Token> {
+fn lex_add() -> Vec<Token> {
     let source =
         fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/add.rant")).unwrap();
 
     rant::lexer::tokenize(Box::leak(source.into_boxed_str())).unwrap()
 }
 
-fn parse_add(tokens: Lexer<'_, Token>) {
+fn parse_add(tokens: Vec<Token>) {
     use rant::parser::{self, Node};
 
     let parsed_ast = parser::parse(tokens).unwrap();
