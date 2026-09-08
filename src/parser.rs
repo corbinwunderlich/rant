@@ -7,6 +7,8 @@ use crate::lexer::Token;
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
+    #[error("expected {expected}, got `{got}`")]
+    UnexpectedToken { expected: &'static str, got: String },
     #[error("failed to parse")]
     Parse,
     #[error("failed to lex")]
@@ -72,15 +74,32 @@ impl Parsable for TypedIdent {
     fn parse(tokens: &mut MultiPeek<Lexer<'_, Token>>) -> Result<Self, Error> {
         let ident = match tokens.next() {
             Some(Ok(Token::Ident(ident))) => ident,
+            Some(Ok(token)) => {
+                return Err(Error::UnexpectedToken {
+                    expected: "identifier",
+                    got: format!("{token:?}"),
+                });
+            }
             _ => return Err(Error::Parse),
         };
 
-        if tokens.next() != Some(Ok(Token::Colon)) {
-            return Err(Error::Parse);
+        if let token = tokens.next()
+            && token != Some(Ok(Token::Colon))
+        {
+            return Err(Error::UnexpectedToken {
+                expected: "`:`",
+                got: format!("{token:?}"),
+            });
         }
 
         let ty = match tokens.next() {
             Some(Ok(Token::Ident(ident))) => ident,
+            Some(Ok(token)) => {
+                return Err(Error::UnexpectedToken {
+                    expected: "identifier",
+                    got: format!("{token:?}"),
+                });
+            }
             _ => return Err(Error::Parse),
         };
 
@@ -94,7 +113,7 @@ impl Parsable for Expression {
 
         tokens.reset_peek();
 
-        match tokens.peek().ok_or(Error::Parse)?.as_ref() {
+        match tokens.peek().ok_or(Error::UnexpectedEof)?.as_ref() {
             Ok(Token::Semicolon | Token::Comma) => {
                 tokens.next();
 
@@ -135,11 +154,22 @@ impl Parsable for FunctionCall {
     fn parse(tokens: &mut MultiPeek<Lexer<'_, Token>>) -> Result<Self, Error> {
         let ident = match tokens.next() {
             Some(Ok(Token::Ident(ident))) => ident,
+            Some(Ok(token)) => {
+                return Err(Error::UnexpectedToken {
+                    expected: "identifier",
+                    got: format!("{token:?}"),
+                });
+            }
             _ => return Err(Error::Parse),
         };
 
-        if tokens.next() != Some(Ok(Token::LeftParen)) {
-            return Err(Error::Parse);
+        if let token = tokens.next()
+            && token != Some(Ok(Token::LeftParen))
+        {
+            return Err(Error::UnexpectedToken {
+                expected: "`(`",
+                got: format!("{token:?}"),
+            });
         }
 
         let mut params: Vec<Expression> = Vec::new();
@@ -180,7 +210,7 @@ impl Parsable for Term {
 
         let next_token = tokens
             .peek()
-            .ok_or(Error::Parse)?
+            .ok_or(Error::UnexpectedEof)?
             .as_ref()
             .map_err(Clone::clone)?;
 
@@ -212,24 +242,43 @@ impl Parsable for Term {
 
                 Ok(Self::Ident(ident))
             }
-            _ => Err(Error::Parse),
+            token => Err(Error::UnexpectedToken {
+                expected: "number, string, or identifier",
+                got: format!("{token:?}"),
+            }),
         }
     }
 }
 
 impl Parsable for Declaration {
     fn parse(tokens: &mut MultiPeek<Lexer<'_, Token>>) -> Result<Self, Error> {
-        if tokens.next() != Some(Ok(Token::Fn)) {
-            return Err(Error::Parse);
+        if let token = tokens.next()
+            && token != Some(Ok(Token::Fn))
+        {
+            return Err(Error::UnexpectedToken {
+                expected: "`fn`",
+                got: format!("{token:?}"),
+            });
         }
 
         let ident = match tokens.next() {
             Some(Ok(Token::Ident(ident))) => ident,
+            Some(Ok(token)) => {
+                return Err(Error::UnexpectedToken {
+                    expected: "identifier",
+                    got: format!("{token:?}"),
+                });
+            }
             _ => return Err(Error::Parse),
         };
 
-        if tokens.next() != Some(Ok(Token::LeftParen)) {
-            return Err(Error::Parse);
+        if let token = tokens.next()
+            && token != Some(Ok(Token::LeftParen))
+        {
+            return Err(Error::UnexpectedToken {
+                expected: "`(`",
+                got: format!("{token:?}"),
+            });
         }
 
         let mut params: Vec<TypedIdent> = Vec::new();
@@ -246,21 +295,42 @@ impl Parsable for Declaration {
             match tokens.next().ok_or(Error::UnexpectedEof)?? {
                 Token::Comma => continue,
                 Token::RightParen => break,
-                _ => return Err(Error::Parse),
+                token => {
+                    return Err(Error::UnexpectedToken {
+                        expected: "`,` or `)`",
+                        got: format!("{token:?}"),
+                    });
+                }
             }
         }
 
-        if tokens.next() != Some(Ok(Token::Arrow)) {
-            return Err(Error::Parse);
+        if let token = tokens.next()
+            && token != Some(Ok(Token::Arrow))
+        {
+            return Err(Error::UnexpectedToken {
+                expected: "`->`",
+                got: format!("{token:?}"),
+            });
         }
 
         let return_type = match tokens.next() {
             Some(Ok(Token::Ident(ident))) => ident,
+            Some(Ok(token)) => {
+                return Err(Error::UnexpectedToken {
+                    expected: "identifier",
+                    got: format!("{token:?}"),
+                });
+            }
             _ => return Err(Error::Parse),
         };
 
-        if tokens.next() != Some(Ok(Token::Equals)) {
-            return Err(Error::Parse);
+        if let token = tokens.next()
+            && token != Some(Ok(Token::Equals))
+        {
+            return Err(Error::UnexpectedToken {
+                expected: "`=`",
+                got: format!("{token:?}"),
+            });
         }
 
         Ok(Self::Function {
