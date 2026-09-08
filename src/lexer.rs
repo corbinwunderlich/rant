@@ -24,6 +24,12 @@ pub enum Token {
     Ident(String),
     #[regex("[0-9]+", |lex| lex.slice().parse())]
     Number(u64),
+    #[regex(r#""([^"\\]|\\.)*""#, |lex| {
+        let s = lex.slice();
+
+        s[1..s.len() - 1].parse().ok()
+    })]
+    String(String),
     #[token(":")]
     Colon,
     #[token("+")]
@@ -48,8 +54,8 @@ pub enum Token {
     LeftParen,
     #[token(")")]
     RightParen,
-    #[regex("#.*", |lex| lex.slice().parse().ok(), priority = 255, allow_greedy = true)]
-    Comment(String),
+    #[regex("#.*", logos::skip, priority = 255, allow_greedy = true)]
+    Comment,
 }
 
 pub fn tokenize(source: &str) -> Result<Lexer<'_, Token>, Error> {

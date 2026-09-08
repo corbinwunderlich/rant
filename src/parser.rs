@@ -30,6 +30,7 @@ pub struct TypedIdent(pub Ident, pub Type);
 #[derive(Debug, PartialEq)]
 pub enum Literal {
     Number(u64),
+    String(String),
 }
 
 #[derive(Debug, PartialEq)]
@@ -156,7 +157,7 @@ impl Parsable for FunctionCall {
                 .peek()
                 .ok_or(Error::UnexpectedEof)?
                 .as_ref()
-                .map_err(std::clone::Clone::clone)?
+                .map_err(Clone::clone)?
                 == Token::RightParen
             {
                 tokens.next();
@@ -181,7 +182,7 @@ impl Parsable for Term {
             .peek()
             .ok_or(Error::Parse)?
             .as_ref()
-            .map_err(std::clone::Clone::clone)?;
+            .map_err(Clone::clone)?;
 
         match next_token {
             Token::Number(number) => {
@@ -190,6 +191,13 @@ impl Parsable for Term {
                 tokens.next();
 
                 Ok(Self::Literal(Literal::Number(number)))
+            }
+            Token::String(string) => {
+                let string = string.clone();
+
+                tokens.next();
+
+                Ok(Self::Literal(Literal::String(string)))
             }
             Token::Ident(ident) => {
                 let ident = ident.clone();
