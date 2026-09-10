@@ -54,6 +54,14 @@
                 extraArgs = "--fix --allow-dirty";
               };
             };
+
+            tests = {
+              enable = true;
+
+              entry = "${pkgs.cargo}/bin/cargo test";
+
+              pass_filenames = false;
+            };
           };
         };
 
