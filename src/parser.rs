@@ -216,58 +216,34 @@ fn expression(tokens: TokenStream) -> Result<Expression, Error> {
 
     let left = Expression::Term(term(tokens)?);
 
+    macro_rules! binary_op {
+        ($token:path, $expression_type:path) => {
+            expect_token!(tokens, $token);
+
+            let right = expression(tokens)?;
+
+            let expression = $expression_type(Box::new(left), Box::new(right));
+
+            if let Some(let_in) = let_in {
+                return Ok(Expression::LetIn(let_in, Box::new(expression)));
+            }
+
+            return Ok(expression);
+        };
+    }
+
     match *tokens.peek().ok_or(Error::UnexpectedEof)? {
         Token::Plus => {
-            expect_token!(tokens, Token::Plus);
-
-            let right = expression(tokens)?;
-
-            let expression = Expression::Addition(Box::new(left), Box::new(right));
-
-            if let Some(let_in) = let_in {
-                return Ok(Expression::LetIn(let_in, Box::new(expression)));
-            }
-
-            return Ok(expression);
+            binary_op!(Token::Plus, Expression::Addition);
         }
         Token::Minus => {
-            expect_token!(tokens, Token::Minus);
-
-            let right = expression(tokens)?;
-
-            let expression = Expression::Subtraction(Box::new(left), Box::new(right));
-
-            if let Some(let_in) = let_in {
-                return Ok(Expression::LetIn(let_in, Box::new(expression)));
-            }
-
-            return Ok(expression);
+            binary_op!(Token::Minus, Expression::Subtraction);
         }
         Token::Asterisk => {
-            expect_token!(tokens, Token::Asterisk);
-
-            let right = expression(tokens)?;
-
-            let expression = Expression::Multiplication(Box::new(left), Box::new(right));
-
-            if let Some(let_in) = let_in {
-                return Ok(Expression::LetIn(let_in, Box::new(expression)));
-            }
-
-            return Ok(expression);
+            binary_op!(Token::Asterisk, Expression::Multiplication);
         }
         Token::ForwardSlash => {
-            expect_token!(tokens, Token::ForwardSlash);
-
-            let right = expression(tokens)?;
-
-            let expression = Expression::Division(Box::new(left), Box::new(right));
-
-            if let Some(let_in) = let_in {
-                return Ok(Expression::LetIn(let_in, Box::new(expression)));
-            }
-
-            return Ok(expression);
+            binary_op!(Token::ForwardSlash, Expression::Division);
         }
         _ => tokens.reset_peek(),
     }
