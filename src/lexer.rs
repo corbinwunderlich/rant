@@ -20,18 +20,18 @@ impl From<ParseIntError> for Error {
 #[derive(Debug, Logos, PartialEq)]
 #[logos(skip r"\s+", error = Error)]
 pub enum Token {
-    #[regex("[a-z_][a-z0-9_']*", |lex| lex.slice().parse().ok())]
-    ValueIdent(String),
-    #[regex("[A-Z][a-zA-Z0-9]*", |lex| lex.slice().parse().ok())]
-    TypeIdent(String),
+    #[regex("[a-z_][a-z0-9_']*", |lex| lex.slice().parse::<String>().ok().map(Into::into))]
+    ValueIdent(Box<str>),
+    #[regex("[A-Z][a-zA-Z0-9]*", |lex| lex.slice().parse::<String>().ok().map(Into::into))]
+    TypeIdent(Box<str>),
     #[regex("[0-9]+", |lex| lex.slice().parse())]
     Number(u64),
     #[regex(r#""([^"\\]|\\.)*""#, |lex| {
         let s = lex.slice();
 
-        s[1..s.len() - 1].parse().ok()
+        s[1..s.len() - 1].parse::<String>().ok().map(Into::into)
     })]
-    String(String),
+    String(Box<str>),
     #[token("let")]
     Let,
     #[token("in")]

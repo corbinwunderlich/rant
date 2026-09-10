@@ -16,13 +16,13 @@ pub enum Error {
 
 type TokenStream<'a> = &'a mut MultiPeek<IntoIter<Token>>;
 
-type Ident = String;
-type Type = String;
+type Ident = Box<str>;
+type Type = Box<str>;
 
 #[derive(Debug, PartialEq)]
 pub enum Literal {
     Number(u64),
-    String(String),
+    String(Box<str>),
 }
 
 #[derive(Debug, PartialEq)]
