@@ -26,8 +26,14 @@
       perSystem = {
         pkgs,
         config,
+        self',
         ...
       }: {
+        packages = {
+          cgen = pkgs.callPackage ./default.nix {};
+          default = self'.packages.cgen;
+        };
+
         pre-commit.settings = {
           hooks = {
             alejandra.enable = true;
