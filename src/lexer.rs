@@ -47,7 +47,7 @@ pub enum Token {
     #[token("*")]
     Asterisk,
     #[token("/")]
-    ForwardSlash,
+    Slash,
     #[token("=")]
     Equals,
     #[token(",")]
@@ -100,7 +100,7 @@ macro_rules! token_description {
     (Token::Asterisk) => {
         "`*`"
     };
-    (Token::ForwardSlash) => {
+    (Token::Slash) => {
         "`/`"
     };
     (Token::Equals) => {
@@ -144,7 +144,7 @@ impl Token {
             Self::Plus => token_description!(Token::Plus),
             Self::Minus => token_description!(Token::Minus),
             Self::Asterisk => token_description!(Token::Asterisk),
-            Self::ForwardSlash => token_description!(Token::ForwardSlash),
+            Self::Slash => token_description!(Token::Slash),
             Self::Equals => token_description!(Token::Equals),
             Self::Comma => token_description!(Token::Comma),
             Self::Semicolon => token_description!(Token::Semicolon),

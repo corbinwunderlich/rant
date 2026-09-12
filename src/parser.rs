@@ -20,26 +20,29 @@ type Ident = Box<str>;
 type Type = Box<str>;
 
 #[derive(Debug, PartialEq)]
-pub enum Literal {
-    Number(u64),
-    String(Box<str>),
-}
-
-#[derive(Debug, PartialEq)]
 pub struct FunctionCall {
     pub ident: Ident,
     pub params: Box<[Expression]>,
 }
 
 #[derive(Debug, PartialEq)]
-pub enum Term {
-    Literal(Literal),
+pub enum Factor {
     Ident(Ident),
+    Number(u64),
+    String(Box<str>),
     FunctionCall(FunctionCall),
+    Expression(Box<Expression>),
 }
 
 #[derive(Debug, PartialEq)]
-pub struct LetIn {
+pub enum Term {
+    Factor(Factor),
+    Mult(Box<Term>, Box<Term>),
+    Div(Box<Term>, Box<Term>),
+}
+
+#[derive(Debug, PartialEq)]
+pub struct LetDecl {
     pub declarations: Box<[(Ident, Type)]>,
     pub definitions: Box<[(Ident, Expression)]>,
 }
@@ -47,21 +50,19 @@ pub struct LetIn {
 #[derive(Debug, PartialEq)]
 pub enum Expression {
     Term(Term),
-    LetIn(LetIn, Box<Expression>),
-    Addition(Box<Expression>, Box<Expression>),
-    Subtraction(Box<Expression>, Box<Expression>),
-    Multiplication(Box<Expression>, Box<Expression>),
-    Division(Box<Expression>, Box<Expression>),
+    Let(LetDecl, Box<Expression>),
+    Add(Term, Box<Expression>),
+    Sub(Term, Box<Expression>),
 }
 
 #[derive(Debug, PartialEq)]
 pub enum Declaration {
-    FunctionDeclaration {
+    FunctionDecl {
         ident: Ident,
         param_types: Box<[Type]>,
         return_type: Type,
     },
-    FunctionDefinition {
+    FunctionDef {
         ident: Ident,
         param_idents: Box<[Ident]>,
         body: Expression,
@@ -104,32 +105,67 @@ macro_rules! accept_token {
     };
 }
 
-fn term(tokens: TokenStream) -> Result<Term, Error> {
+fn factor(tokens: TokenStream) -> Result<Factor, Error> {
     match tokens.peek().ok_or(Error::UnexpectedEof)? {
-        Token::Number(_) => {
-            let number = accept_token!(tokens, Token::Number);
-
-            Ok(Term::Literal(Literal::Number(number)))
-        }
-        Token::String(_) => {
-            let string = accept_token!(tokens, Token::String);
-
-            Ok(Term::Literal(Literal::String(string)))
-        }
         Token::ValueIdent(_) => {
             if let Some(Token::LeftParen) = tokens.peek() {
                 let call = function_call(tokens)?;
 
-                return Ok(Term::FunctionCall(call));
+                return Ok(Factor::FunctionCall(call));
             }
 
             let ident = accept_token!(tokens, Token::ValueIdent);
 
-            Ok(Term::Ident(ident))
+            Ok(Factor::Ident(ident))
+        }
+        Token::Number(_) => {
+            let number = accept_token!(tokens, Token::Number);
+
+            Ok(Factor::Number(number))
+        }
+        Token::String(_) => {
+            let string = accept_token!(tokens, Token::String);
+
+            Ok(Factor::String(string))
+        }
+        Token::LeftParen => {
+            expect_token!(tokens, Token::LeftParen);
+
+            let expression = Box::new(expression(tokens)?);
+
+            expect_token!(tokens, Token::RightParen);
+
+            Ok(Factor::Expression(expression))
         }
         _ => Err(Error::UnexpectedToken {
-            expected: "literal or identifier",
+            expected: "literal, identifier, or `(`",
             got: "none".to_string(),
+        }),
+    }
+}
+
+fn term(tokens: TokenStream) -> Result<Term, Error> {
+    let lhs = Term::Factor(factor(tokens)?);
+
+    if !matches!(
+        tokens.peek().ok_or(Error::UnexpectedEof)?,
+        Token::Asterisk | Token::Slash
+    ) {
+        tokens.reset_peek();
+
+        return Ok(lhs);
+    }
+
+    let op = tokens.next().ok_or(Error::UnexpectedEof)?;
+
+    let rhs = term(tokens)?;
+
+    match op {
+        Token::Asterisk => Ok(Term::Mult(Box::new(lhs), Box::new(rhs))),
+        Token::Slash => Ok(Term::Div(Box::new(lhs), Box::new(rhs))),
+        token => Err(Error::UnexpectedToken {
+            expected: "`*` or `/`",
+            got: format!("{token:?}"),
         }),
     }
 }
@@ -158,7 +194,7 @@ fn let_in_definition(tokens: TokenStream) -> Result<(Ident, Expression), Error> 
     Ok((ident, body))
 }
 
-fn let_in_expression(tokens: TokenStream) -> Result<LetIn, Error> {
+fn let_in_expression(tokens: TokenStream) -> Result<LetDecl, Error> {
     expect_token!(tokens, Token::Let);
 
     let mut declarations: Vec<(Ident, Type)> = Vec::new();
@@ -197,14 +233,14 @@ fn let_in_expression(tokens: TokenStream) -> Result<LetIn, Error> {
 
     expect_token!(tokens, Token::In);
 
-    Ok(LetIn {
+    Ok(LetDecl {
         declarations: declarations.into_boxed_slice(),
         definitions: definitions.into_boxed_slice(),
     })
 }
 
 fn expression(tokens: TokenStream) -> Result<Expression, Error> {
-    let let_in = match tokens.peek() {
+    let let_decl = match tokens.peek() {
         Some(Token::Let) => Some(let_in_expression(tokens)?),
         Some(_) => {
             tokens.reset_peek();
@@ -214,45 +250,43 @@ fn expression(tokens: TokenStream) -> Result<Expression, Error> {
         None => return Err(Error::UnexpectedEof),
     };
 
-    let left = Expression::Term(term(tokens)?);
+    let lhs = term(tokens)?;
 
-    macro_rules! binary_op {
-        ($token:path, $expression_type:path) => {
-            expect_token!(tokens, $token);
+    if !matches!(
+        tokens.peek().ok_or(Error::UnexpectedEof)?,
+        Token::Plus | Token::Minus
+    ) {
+        tokens.reset_peek();
 
-            let right = expression(tokens)?;
+        let lhs = Expression::Term(lhs);
 
-            let expression = $expression_type(Box::new(left), Box::new(right));
+        if let Some(let_decl) = let_decl {
+            return Ok(Expression::Let(let_decl, Box::new(lhs)));
+        }
 
-            if let Some(let_in) = let_in {
-                return Ok(Expression::LetIn(let_in, Box::new(expression)));
-            }
-
-            return Ok(expression);
-        };
+        return Ok(lhs);
     }
 
-    match *tokens.peek().ok_or(Error::UnexpectedEof)? {
-        Token::Plus => {
-            binary_op!(Token::Plus, Expression::Addition);
+    let op = tokens.next().ok_or(Error::UnexpectedEof)?;
+
+    let rhs = Box::new(expression(tokens)?);
+
+    let expression = match op {
+        Token::Plus => Expression::Add(lhs, rhs),
+        Token::Minus => Expression::Sub(lhs, rhs),
+        token => {
+            return Err(Error::UnexpectedToken {
+                expected: "`+` or `-`",
+                got: format!("{token:?}"),
+            });
         }
-        Token::Minus => {
-            binary_op!(Token::Minus, Expression::Subtraction);
-        }
-        Token::Asterisk => {
-            binary_op!(Token::Asterisk, Expression::Multiplication);
-        }
-        Token::ForwardSlash => {
-            binary_op!(Token::ForwardSlash, Expression::Division);
-        }
-        _ => tokens.reset_peek(),
+    };
+
+    if let Some(let_decl) = let_decl {
+        return Ok(Expression::Let(let_decl, Box::new(expression)));
     }
 
-    if let Some(let_in) = let_in {
-        return Ok(Expression::LetIn(let_in, Box::new(left)));
-    }
-
-    Ok(left)
+    Ok(expression)
 }
 
 fn function_call(tokens: TokenStream) -> Result<FunctionCall, Error> {
@@ -313,7 +347,7 @@ fn function_declaration(tokens: TokenStream) -> Result<Declaration, Error> {
 
     expect_token!(tokens, Token::Semicolon);
 
-    Ok(Declaration::FunctionDeclaration {
+    Ok(Declaration::FunctionDecl {
         ident,
         param_types: params.into_boxed_slice(),
         return_type,
@@ -349,7 +383,7 @@ fn function_definition(tokens: TokenStream) -> Result<Declaration, Error> {
 
     expect_token!(tokens, Token::Semicolon);
 
-    Ok(Declaration::FunctionDefinition {
+    Ok(Declaration::FunctionDef {
         ident,
         param_idents: params.into_boxed_slice(),
         body,

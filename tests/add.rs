@@ -2,7 +2,7 @@ use std::{env, fs, path::Path};
 
 use rant::{
     lexer::Token,
-    parser::{Declaration, Expression, FunctionCall, LetIn, Literal, Term},
+    parser::{Declaration, Expression, Factor, FunctionCall, LetDecl, Term},
 };
 
 fn lex_add() -> Vec<Token> {
@@ -18,46 +18,48 @@ fn parse_add(tokens: Vec<Token>) {
     let parsed_ast = parser::parse(tokens).unwrap();
 
     let expected_ast = Node::Program(Box::new([
-        Node::Declaration(Declaration::FunctionDeclaration {
+        Node::Declaration(Declaration::FunctionDecl {
             ident: "add".into(),
             param_types: Box::new(["Int".into(), "Int".into()]),
             return_type: "Int".into(),
         }),
-        Node::Declaration(Declaration::FunctionDefinition {
+        Node::Declaration(Declaration::FunctionDef {
             ident: "add".into(),
             param_idents: Box::new(["a".into(), "b".into()]),
-            body: Expression::LetIn(
-                LetIn {
+            body: Expression::Let(
+                LetDecl {
                     declarations: Box::new([("ans".into(), "Int".into())]),
                     definitions: Box::new([(
                         "ans".into(),
-                        Expression::Addition(
-                            Box::new(Expression::Term(Term::Ident("a".into()))),
-                            Box::new(Expression::Term(Term::Ident("b".into()))),
+                        Expression::Add(
+                            Term::Factor(Factor::Ident("a".into())),
+                            Box::new(Expression::Term(Term::Factor(Factor::Ident("b".into())))),
                         ),
                     )]),
                 },
-                Box::new(Expression::Term(Term::Ident("ans".into()))),
+                Box::new(Expression::Term(Term::Factor(Factor::Ident("ans".into())))),
             ),
         }),
-        Node::Declaration(Declaration::FunctionDeclaration {
+        Node::Declaration(Declaration::FunctionDecl {
             ident: "main".into(),
             param_types: Box::new([]),
             return_type: "Void".into(),
         }),
-        Node::Declaration(Declaration::FunctionDefinition {
+        Node::Declaration(Declaration::FunctionDef {
             ident: "main".into(),
             param_idents: Box::new([]),
-            body: Expression::Term(Term::FunctionCall(FunctionCall {
+            body: Expression::Term(Term::Factor(Factor::FunctionCall(FunctionCall {
                 ident: "print".into(),
-                params: Box::new([Expression::Term(Term::FunctionCall(FunctionCall {
-                    ident: "add".into(),
-                    params: Box::new([
-                        Expression::Term(Term::Literal(Literal::Number(1))),
-                        Expression::Term(Term::Literal(Literal::Number(2))),
-                    ]),
-                }))]),
-            })),
+                params: Box::new([Expression::Term(Term::Factor(Factor::FunctionCall(
+                    FunctionCall {
+                        ident: "add".into(),
+                        params: Box::new([
+                            Expression::Term(Term::Factor(Factor::Number(1))),
+                            Expression::Term(Term::Factor(Factor::Number(2))),
+                        ]),
+                    },
+                )))]),
+            }))),
         }),
     ]));
 
