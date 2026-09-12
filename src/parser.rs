@@ -31,7 +31,7 @@ pub enum Factor {
     Number(u64),
     String(Box<str>),
     FunctionCall(FunctionCall),
-    Expression(Box<Expression>),
+    Group(Box<Expression>),
 }
 
 #[derive(Debug, PartialEq)]
@@ -42,7 +42,7 @@ pub enum Term {
 }
 
 #[derive(Debug, PartialEq)]
-pub struct LetDecl {
+pub struct LetBindings {
     pub declarations: Box<[(Ident, Type)]>,
     pub definitions: Box<[(Ident, Expression)]>,
 }
@@ -50,29 +50,34 @@ pub struct LetDecl {
 #[derive(Debug, PartialEq)]
 pub enum Expression {
     Term(Term),
-    Let(LetDecl, Box<Expression>),
+    Let(LetBindings, Box<Expression>),
     Add(Term, Box<Expression>),
     Sub(Term, Box<Expression>),
 }
 
 #[derive(Debug, PartialEq)]
-pub enum Declaration {
-    FunctionDecl {
-        ident: Ident,
-        param_types: Box<[Type]>,
-        return_type: Type,
-    },
-    FunctionDef {
-        ident: Ident,
-        param_idents: Box<[Ident]>,
-        body: Expression,
-    },
+pub struct FunctionDecl {
+    pub ident: Ident,
+    pub param_types: Box<[Type]>,
+    pub return_type: Type,
 }
 
 #[derive(Debug, PartialEq)]
-pub enum Node {
-    Program(Box<[Node]>),
-    Declaration(Declaration),
+pub struct FunctionDef {
+    pub ident: Ident,
+    pub param_idents: Box<[Ident]>,
+    pub body: Expression,
+}
+
+#[derive(Debug, PartialEq)]
+pub enum Declaration {
+    FunctionDecl(FunctionDecl),
+    FunctionDef(FunctionDef),
+}
+
+#[derive(Debug, PartialEq)]
+pub struct Program {
+    pub nodes: Box<[Declaration]>,
 }
 
 macro_rules! expect_token {
@@ -135,7 +140,7 @@ fn factor(tokens: TokenStream) -> Result<Factor, Error> {
 
             expect_token!(tokens, Token::RightParen);
 
-            Ok(Factor::Expression(expression))
+            Ok(Factor::Group(expression))
         }
         _ => Err(Error::UnexpectedToken {
             expected: "literal, identifier, or `(`",
@@ -194,7 +199,7 @@ fn let_in_definition(tokens: TokenStream) -> Result<(Ident, Expression), Error> 
     Ok((ident, body))
 }
 
-fn let_in_expression(tokens: TokenStream) -> Result<LetDecl, Error> {
+fn let_in_bindings(tokens: TokenStream) -> Result<LetBindings, Error> {
     expect_token!(tokens, Token::Let);
 
     let mut declarations: Vec<(Ident, Type)> = Vec::new();
@@ -233,7 +238,7 @@ fn let_in_expression(tokens: TokenStream) -> Result<LetDecl, Error> {
 
     expect_token!(tokens, Token::In);
 
-    Ok(LetDecl {
+    Ok(LetBindings {
         declarations: declarations.into_boxed_slice(),
         definitions: definitions.into_boxed_slice(),
     })
@@ -241,7 +246,7 @@ fn let_in_expression(tokens: TokenStream) -> Result<LetDecl, Error> {
 
 fn expression(tokens: TokenStream) -> Result<Expression, Error> {
     let let_decl = match tokens.peek() {
-        Some(Token::Let) => Some(let_in_expression(tokens)?),
+        Some(Token::Let) => Some(let_in_bindings(tokens)?),
         Some(_) => {
             tokens.reset_peek();
 
@@ -318,7 +323,7 @@ fn function_call(tokens: TokenStream) -> Result<FunctionCall, Error> {
     })
 }
 
-fn function_declaration(tokens: TokenStream) -> Result<Declaration, Error> {
+fn function_declaration(tokens: TokenStream) -> Result<FunctionDecl, Error> {
     expect_token!(tokens, Token::Fn);
 
     let ident = accept_token!(tokens, Token::ValueIdent);
@@ -347,14 +352,14 @@ fn function_declaration(tokens: TokenStream) -> Result<Declaration, Error> {
 
     expect_token!(tokens, Token::Semicolon);
 
-    Ok(Declaration::FunctionDecl {
+    Ok(FunctionDecl {
         ident,
         param_types: params.into_boxed_slice(),
         return_type,
     })
 }
 
-fn function_definition(tokens: TokenStream) -> Result<Declaration, Error> {
+fn function_definition(tokens: TokenStream) -> Result<FunctionDef, Error> {
     expect_token!(tokens, Token::Fn);
 
     let ident = accept_token!(tokens, Token::ValueIdent);
@@ -383,7 +388,7 @@ fn function_definition(tokens: TokenStream) -> Result<Declaration, Error> {
 
     expect_token!(tokens, Token::Semicolon);
 
-    Ok(Declaration::FunctionDef {
+    Ok(FunctionDef {
         ident,
         param_idents: params.into_boxed_slice(),
         body,
@@ -405,8 +410,10 @@ fn declaration(tokens: TokenStream) -> Result<Declaration, Error> {
             }
 
             match tokens.peek() {
-                Some(Token::DoubleColon) => function_declaration(tokens),
-                Some(Token::Equals) => function_definition(tokens),
+                Some(Token::DoubleColon) => {
+                    Ok(Declaration::FunctionDecl(function_declaration(tokens)?))
+                }
+                Some(Token::Equals) => Ok(Declaration::FunctionDef(function_definition(tokens)?)),
                 Some(token) => Err(Error::UnexpectedToken {
                     expected: concat!(
                         crate::lexer::token_description!(Token::DoubleColon),
@@ -426,7 +433,7 @@ fn declaration(tokens: TokenStream) -> Result<Declaration, Error> {
     }
 }
 
-pub fn parse(tokens: Vec<Token>) -> Result<Node, Error> {
+pub fn parse(tokens: Vec<Token>) -> Result<Program, Error> {
     let mut tokens = tokens.into_iter().multipeek();
 
     let mut declarations: Vec<Declaration> = Vec::new();
@@ -437,11 +444,7 @@ pub fn parse(tokens: Vec<Token>) -> Result<Node, Error> {
         declarations.push(declaration(&mut tokens)?);
     }
 
-    Ok(Node::Program(
-        declarations
-            .into_iter()
-            .map(Node::Declaration)
-            .collect::<Vec<Node>>()
-            .into_boxed_slice(),
-    ))
+    Ok(Program {
+        nodes: declarations.into_boxed_slice(),
+    })
 }
