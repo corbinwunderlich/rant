@@ -36,6 +36,8 @@ pub enum Token {
     Let,
     #[token("in")]
     In,
+    #[token("type")]
+    Type,
     #[token("fn")]
     Fn,
     #[token(":")]
@@ -56,8 +58,6 @@ pub enum Token {
     Semicolon,
     #[token("->")]
     Arrow,
-    #[token("::")]
-    DoubleColon,
     #[token("(")]
     LeftParen,
     #[token(")")]
@@ -84,6 +84,9 @@ macro_rules! token_description {
     };
     (Token::In) => {
         "`in`"
+    };
+    (Token::Type) => {
+        "`type`"
     };
     (Token::Fn) => {
         "`fn`"
@@ -115,9 +118,6 @@ macro_rules! token_description {
     (Token::Arrow) => {
         "`->`"
     };
-    (Token::DoubleColon) => {
-        "`::`"
-    };
     (Token::LeftParen) => {
         "`(`"
     };
@@ -140,6 +140,7 @@ impl Token {
             Self::Let => token_description!(Token::Let),
             Self::In => token_description!(Token::In),
             Self::Fn => token_description!(Token::Fn),
+            Self::Type => token_description!(Token::Type),
             Self::Colon => token_description!(Token::Colon),
             Self::Plus => token_description!(Token::Plus),
             Self::Minus => token_description!(Token::Minus),
@@ -149,7 +150,6 @@ impl Token {
             Self::Comma => token_description!(Token::Comma),
             Self::Semicolon => token_description!(Token::Semicolon),
             Self::Arrow => token_description!(Token::Arrow),
-            Self::DoubleColon => token_description!(Token::DoubleColon),
             Self::LeftParen => token_description!(Token::LeftParen),
             Self::RightParen => token_description!(Token::RightParen),
             Self::Comment => token_description!(Token::Comment),

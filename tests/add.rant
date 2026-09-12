@@ -1,5 +1,8 @@
-fn add :: (Int, Int) -> Int;
-fn add = (a, b): let ans :: Int; ans = a + b; in ans;
+type fn add = (Int, Int) -> Int;
+fn add = (a, b): let
+  type ans = Int;
+  ans = a + b;
+in ans;
 
-fn main :: () -> Void;
+type fn main = () -> Void;
 fn main = (): print (add (1, 2));

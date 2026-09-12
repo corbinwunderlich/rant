@@ -1,2 +1,2 @@
-fn main :: () -> Void;
+type fn main = () -> Void;
 fn main = (): print (1 + 2 * 2 * 2 - 1);

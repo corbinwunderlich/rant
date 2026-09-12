@@ -176,9 +176,11 @@ fn term(tokens: TokenStream) -> Result<Term, Error> {
 }
 
 fn let_in_declaration(tokens: TokenStream) -> Result<(Ident, Type), Error> {
+    expect_token!(tokens, Token::Type);
+
     let ident = accept_token!(tokens, Token::ValueIdent);
 
-    expect_token!(tokens, Token::DoubleColon);
+    expect_token!(tokens, Token::Equals);
 
     let type_ident = accept_token!(tokens, Token::TypeIdent);
 
@@ -209,26 +211,20 @@ fn let_in_bindings(tokens: TokenStream) -> Result<LetBindings, Error> {
         tokens.reset_peek();
 
         match tokens.peek() {
-            Some(Token::ValueIdent(_)) => {}
-            Some(token) => {
-                return Err(Error::UnexpectedToken {
-                    expected: crate::lexer::token_description!(Token::ValueIdent),
-                    got: format!("{token:?}"),
-                });
-            }
-            None => return Err(Error::UnexpectedEof),
-        }
-
-        match tokens.peek() {
-            Some(Token::DoubleColon) => {
+            Some(Token::Type) => {
                 declarations.push(let_in_declaration(tokens)?);
             }
-            Some(Token::Equals) => {
+            Some(Token::ValueIdent(_)) => {
                 definitions.push(let_in_definition(tokens)?);
             }
             Some(token) => {
                 return Err(Error::UnexpectedToken {
-                    expected: "`::` or `=`",
+                    expected: format!(
+                        "{} or {}",
+                        Token::Type.description(),
+                        crate::lexer::token_description!(Token::ValueIdent)
+                    )
+                    .leak(),
                     got: format!("{token:?}"),
                 });
             }
@@ -324,11 +320,12 @@ fn function_call(tokens: TokenStream) -> Result<FunctionCall, Error> {
 }
 
 fn function_declaration(tokens: TokenStream) -> Result<FunctionDecl, Error> {
+    expect_token!(tokens, Token::Type);
     expect_token!(tokens, Token::Fn);
 
     let ident = accept_token!(tokens, Token::ValueIdent);
 
-    expect_token!(tokens, Token::DoubleColon);
+    expect_token!(tokens, Token::Equals);
     expect_token!(tokens, Token::LeftParen);
 
     let mut params: Vec<Type> = Vec::new();
@@ -397,36 +394,15 @@ fn function_definition(tokens: TokenStream) -> Result<FunctionDef, Error> {
 
 fn declaration(tokens: TokenStream) -> Result<Declaration, Error> {
     match tokens.peek() {
-        Some(Token::Fn) => {
-            match tokens.peek() {
-                Some(Token::ValueIdent(_)) => {}
-                Some(token) => {
-                    return Err(Error::UnexpectedToken {
-                        expected: crate::lexer::token_description!(Token::ValueIdent),
-                        got: format!("{token:?}"),
-                    });
-                }
-                None => return Err(Error::UnexpectedEof),
-            }
-
-            match tokens.peek() {
-                Some(Token::DoubleColon) => {
-                    Ok(Declaration::FunctionDecl(function_declaration(tokens)?))
-                }
-                Some(Token::Equals) => Ok(Declaration::FunctionDef(function_definition(tokens)?)),
-                Some(token) => Err(Error::UnexpectedToken {
-                    expected: concat!(
-                        crate::lexer::token_description!(Token::DoubleColon),
-                        " or ",
-                        crate::lexer::token_description!(Token::Equals)
-                    ),
-                    got: format!("{token:?}"),
-                }),
-                None => Err(Error::UnexpectedEof),
-            }
-        }
+        Some(Token::Type) => Ok(Declaration::FunctionDecl(function_declaration(tokens)?)),
+        Some(Token::Fn) => Ok(Declaration::FunctionDef(function_definition(tokens)?)),
         Some(token) => Err(Error::UnexpectedToken {
-            expected: Token::Fn.description(),
+            expected: format!(
+                "{} or {}",
+                Token::Type.description(),
+                Token::Fn.description()
+            )
+            .leak(),
             got: format!("{token:?}"),
         }),
         None => Err(Error::UnexpectedEof),
